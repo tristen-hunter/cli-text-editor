@@ -51,6 +51,7 @@ struct editorConfig {
 struct editorConfig E;
 
 enum editorKey {
+    BACKSPACE = 127,
     ARROW_LEFT = 1000,
     ARROW_RIGHT,
     ARROW_UP,
@@ -222,23 +223,40 @@ void editorAppendRow(char *s, size_t len) {
     E.numrows++;
 }
 
+void editorRowInsertChar(erow *row, int at, int c) {
+    if (at < 0 || at > row->size) at = row->size;
+    row->chars = realloc(row->chars, row->size + 2);
+    memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
+    row->size++;
+    row->chars[at] = c;
+    editorUpdateRow(row);
+}
+
+/*** editor operations ***/
+
+void editorInsertChar(int c) {
+    if (E.cy == E.numrows) {
+        editorAppendRow("", 0);
+    }
+    editorRowInsertChar(&E.row[E.cy], E.cx, c);
+    E.cx++;
+}
+
 
 /*** file i/o ***/
 
 void editorOpen(char *filename) {
     free(E.filename);
     E.filename = strdup(filename);
-
     FILE *fp = fopen(filename, "r");
     if (!fp) die("fopen");
     char *line = NULL;
     size_t linecap = 0;
     ssize_t linelen;
-    linelen = getline(&line, &linecap, fp);
     while ((linelen = getline(&line, &linecap, fp)) != -1) {
         while (linelen > 0 && (line[linelen - 1] == '\n' ||
                             line[linelen - 1] == '\r'))
-            linelen--;
+        linelen--;
         editorAppendRow(line, linelen);
     }
     free(line);
@@ -277,9 +295,8 @@ void editorScroll() {
     if (E.cy < E.numrows){
         E.rx = editorRowCxToRx(&E.row[E.cy], E.cx);
     }
-
-    if (E.cy < E.numrows) {
-        E.rx = editorRowCxToRx(&E.row[E.cy], E.cx);
+    if (E.cy < E.rowoff) {
+        E.rowoff = E.cy;
     }
     if (E.cy >= E.rowoff + E.screenrows) {
         E.rowoff = E.cy - E.screenrows + 1;
@@ -431,6 +448,9 @@ void editorMoveCursor(int key) {
 void editorProcessKeypress() {
   int c = editorReadKey();
   switch (c) {
+    case '\r':
+        /*TODO*/
+        break;
     case CTRL_KEY('q'):
       write(STDOUT_FILENO, "\x1b[2J", 4);
       write(STDOUT_FILENO, "\x1b[H", 3);
@@ -445,6 +465,11 @@ void editorProcessKeypress() {
         if (E.cy < E.numrows){
             E.cx = E.row[E.cy].size;
         }
+        break;
+
+    case BACKSPACE:
+    case CTRL_KEY('h'):
+        /*TODO*/
         break;
 
     case PAGE_UP:
@@ -470,6 +495,14 @@ void editorProcessKeypress() {
     case ARROW_RIGHT:
       editorMoveCursor(c);
       break;
+
+    case CTRL_KEY('l'):
+    case '\x1b':
+        break;
+
+    default:
+        editorInsertChar(c);
+        break;
   }
 }
 
